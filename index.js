@@ -70,6 +70,13 @@ async function main() {
     }
 
     for (const keyword of KEYWORDS) {
+        // 첫 번째 키워드가 아니면 검색 전에 잠시 대기 (봇 탐지 방지)
+        if (keyword !== KEYWORDS[0]) {
+            const delayTime = Math.floor(Math.random() * 3000) + 2000; // 2초 ~ 5초 랜덤 대기
+            console.log(`봇 탐지 방지를 위해 ${delayTime}ms 대기...`);
+            await new Promise(r => setTimeout(r, delayTime));
+        }
+
         console.log(`'${keyword}' 키워드 검색 중...`);
         const url = `https://www.gangnamunni.com/events?q=${encodeURIComponent(keyword)}`;
         const response = await page.goto(url, { waitUntil: 'networkidle0' });
