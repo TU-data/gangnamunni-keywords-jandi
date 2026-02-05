@@ -52,9 +52,7 @@ async function main() {
         const keywordResults = [];
 
         // 이벤트 목록 탐색
-        console.log('Page object:', page);
-        console.log('Type of page.$x:', typeof page.$x);
-        const eventElements = await page.$x('/html/body/div[1]/div/div/main/div/main/div/div[1]/main/div[3]/div[2]/ul/div/a');
+        const eventElements = await page.mainFrame().$x('/html/body/div[1]/div/div/main/div/main/div/div[1]/main/div[3]/div[2]/ul/div/a');
         
         for (let i = 0; i < eventElements.length; i++) {
             const element = eventElements[i];
