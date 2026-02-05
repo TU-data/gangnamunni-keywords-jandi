@@ -38,6 +38,11 @@ async function main() {
     });
     
     const page = await browser.newPage();
+
+    // 봇 탐지 우회를 위한 User-Agent 및 헤더 설정
+    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
+    await page.setExtraHTTPHeaders({ 'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7' });
+
     // 디버깅을 위해 브라우저 콘솔 로그를 Node.js 터미널로 출력
     page.on('console', msg => console.log('PAGE LOG:', msg.text()));
     await page.setViewport({ width: 1280, height: 800 });
