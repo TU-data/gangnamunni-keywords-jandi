@@ -34,10 +34,21 @@ async function main() {
 
     const browser = await puppeteer.launch({
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-blink-features=AutomationControlled'
+        ]
     });
     
     const page = await browser.newPage();
+
+    // 봇 탐지 우회 설정: webdriver 프로퍼티 숨기기
+    await page.evaluateOnNewDocument(() => {
+        Object.defineProperty(navigator, 'webdriver', {
+            get: () => false,
+        });
+    });
 
     // 봇 탐지 우회를 위한 User-Agent 및 헤더 설정
     await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
@@ -47,10 +58,21 @@ async function main() {
     page.on('console', msg => console.log('PAGE LOG:', msg.text()));
     await page.setViewport({ width: 1280, height: 800 });
 
+    // 메인 페이지 접속 테스트
+    console.log('메인 페이지 접속 테스트 중...');
+    try {
+        const mainResponse = await page.goto('https://www.gangnamunni.com/', { waitUntil: 'networkidle0' });
+        console.log(`메인 페이지 응답 코드: ${mainResponse.status()}`);
+        await page.screenshot({ path: 'screenshots/main_page_test.png' });
+    } catch (e) {
+        console.error('메인 페이지 접속 실패:', e);
+    }
+
     for (const keyword of KEYWORDS) {
         console.log(`'${keyword}' 키워드 검색 중...`);
         const url = `https://www.gangnamunni.com/events?q=${encodeURIComponent(keyword)}`;
-        await page.goto(url, { waitUntil: 'networkidle0' });
+        const response = await page.goto(url, { waitUntil: 'networkidle0' });
+        console.log(`'${keyword}' 응답 코드: ${response.status()}`);
 
         // 스크린샷 저장
         const screenshotPath = `screenshots/${keyword}.png`;
