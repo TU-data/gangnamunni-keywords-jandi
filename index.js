@@ -4,7 +4,7 @@ const axios = require('axios');
 const fs = require('fs');
 
 const JANDI_WEBHOOK_URL = process.env.JANDI_WEBHOOK_URL;
-const TARGET_CLINIC_NAME = '서울 강남역・TU치과의원(티유치과)';
+const TARGET_CLINIC_NAME = 'TU치과의원';
 const KEYWORDS = [
     '라미네이트',
     '임플란트',
@@ -38,6 +38,8 @@ async function main() {
     });
     
     const page = await browser.newPage();
+    // 디버깅을 위해 브라우저 콘솔 로그를 Node.js 터미널로 출력
+    page.on('console', msg => console.log('PAGE LOG:', msg.text()));
     await page.setViewport({ width: 1280, height: 800 });
 
     for (const keyword of KEYWORDS) {
@@ -51,14 +53,16 @@ async function main() {
 
         const results = await page.evaluate((TARGET_CLINIC_NAME) => {
             const scrapedData = [];
-            const eventNodes = document.evaluate('/html/body/div[1]/div/div/main/div/main/div/div[1]/main/div[3]/div[2]/ul/div/a', document, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
+            // XPath를 절대 경로에서 상대 경로로 변경하여 구조 변경에 유연하게 대응 (메인 영역 내의 리스트 아이템)
+            const eventNodes = document.evaluate('//main//ul/div/a', document, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
             
             let node;
             let rank = 1;
             while ((node = eventNodes.iterateNext())) {
                 const clinicNameNode = document.evaluate('.//div/div[1]/div[1]/span', node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
                 
-                if (clinicNameNode && clinicNameNode.textContent.trim() === TARGET_CLINIC_NAME) {
+                // 병원 이름이 포함되어 있는지 확인 (부분 일치 허용)
+                if (clinicNameNode && clinicNameNode.textContent.includes(TARGET_CLINIC_NAME)) {
                     const eventNameNode = document.evaluate('.//div/div[1]/div[1]/h2', node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
                     const starRatingNode = document.evaluate('.//div/div[1]/div[2]/span[1]', node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
                     const reviewCountNode = document.evaluate('.//div/div[1]/div[2]/span[2]', node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
@@ -109,7 +113,7 @@ async function sendJandiNotification(results) {
     }
 
     const payload = {
-        body: `## 굿닥/강남언니 키워드 순위 리포트 (${new Date().toLocaleDateString('ko-KR')})`,
+        body: `## 강남언니 키워드 순위 리포트 (${new Date().toLocaleDateString('ko-KR')})`,
         connectColor: '#00B8D9',
         connectInfo: [
             {
