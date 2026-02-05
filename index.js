@@ -128,7 +128,7 @@ async function sendJandiNotification(results) {
         const screenshotUrl = `${GITHUB_REPO_URL}/screenshots/${keyword}.png`;
 
         results[keyword].forEach(item => {
-            messageBody += `**${item.eventName}**\n`;
+            messageBody += `**[${item.eventName}]**\n`;
             messageBody += `* 순위: **${item.rank}위**\n`;
             messageBody += `* 별점: ${item.starRating}\n`;
             messageBody += `* 리뷰: ${item.reviewCount}\n`;
@@ -141,11 +141,11 @@ async function sendJandiNotification(results) {
     }
 
     const payload = {
-        body: `## 강남언니 키워드 순위 리포트 (${new Date().toLocaleDateString('ko-KR')})`,
+        body: `📢 강남언니 키워드 순위 리포트 (${new Date().toLocaleDateString('ko-KR')})`,
         connectColor: '#00B8D9',
         connectInfo: [
             {
-                title: '키워드별 순위',
+                title: '🥇 강남언니 키워드별 순위',
                 description: messageBody
             }
         ]
