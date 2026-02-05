@@ -107,9 +107,7 @@ async function main() {
             return scrapedData;
         }, TARGET_CLINIC_NAME);
 
-        if (results.length > 0) {
-            resultsByKeyword[keyword] = results;
-        }
+        resultsByKeyword[keyword] = results;
     }
 
     await browser.close();
@@ -123,16 +121,20 @@ async function sendJandiNotification(results) {
     console.log('Jandi로 결과 전송 중...');
     
     let messageBody = '';
-    for (const keyword in results) {
+    for (const keyword of KEYWORDS) {
         messageBody += `### 🦷 ${keyword}\n`;
-        const screenshotUrl = `${GITHUB_REPO_URL}/screenshots/${keyword}.png`;
+        const screenshotUrl = `${GITHUB_REPO_URL}/screenshots/${encodeURIComponent(keyword)}.png`;
 
-        results[keyword].forEach(item => {
-            messageBody += `**[${item.eventName}]**\n`;
-            messageBody += `* 순위: **${item.rank}위**\n`;
-            messageBody += `* 별점: ${item.starRating}\n`;
-            messageBody += `* 리뷰: ${item.reviewCount}\n`;
-        });
+        if (results[keyword] && results[keyword].length > 0) {
+            results[keyword].forEach(item => {
+                messageBody += `**[${item.eventName}]**\n`;
+                messageBody += `* 순위: **${item.rank}위**\n`;
+                messageBody += `* 별점: ${item.starRating}\n`;
+                messageBody += `* 리뷰: ${item.reviewCount}\n`;
+            });
+        } else {
+            messageBody += '리스트에 없음\n';
+        }
         messageBody += `[스크린샷 보기](${screenshotUrl})\n\n`;
     }
 
