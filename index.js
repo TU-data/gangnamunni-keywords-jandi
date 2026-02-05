@@ -24,6 +24,11 @@ if (!JANDI_WEBHOOK_URL) {
 const GITHUB_REPO_URL = `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY}/${process.env.GITHUB_REF_NAME}`;
 
 async function main() {
+    // 스크린샷 디렉토리 생성
+    if (!fs.existsSync('screenshots')) {
+        fs.mkdirSync('screenshots', { recursive: true });
+    }
+
     console.log('강남언니 키워드 순위 확인 시작');
     const resultsByKeyword = {};
 
