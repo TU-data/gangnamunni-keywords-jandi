@@ -1,0 +1,139 @@
+require('dotenv').config();
+const puppeteer = require('puppeteer');
+const axios = require('axios');
+const fs = require('fs');
+
+const JANDI_WEBHOOK_URL = process.env.JANDI_WEBHOOK_URL;
+const TARGET_CLINIC_NAME = '서울 강남역・TU치과의원(티유치과)';
+const KEYWORDS = [
+    '라미네이트',
+    '임플란트',
+    '치아미백',
+    '잇몸성형',
+    '돌출입교정',
+    '설측교정',
+    '치아교정',
+    '투명교정'
+];
+
+if (!JANDI_WEBHOOK_URL) {
+    console.error('JANDI_WEBHOOK_URL 환경 변수를 설정해야 합니다.');
+    process.exit(1);
+}
+
+const GITHUB_REPO_URL = `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY}/${process.env.GITHUB_REF_NAME}`;
+
+async function main() {
+    console.log('강남언니 키워드 순위 확인 시작');
+    const resultsByKeyword = {};
+
+    const browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 800 });
+
+    for (const keyword of KEYWORDS) {
+        console.log(`'${keyword}' 키워드 검색 중...`);
+        const url = `https://www.gangnamunni.com/events?q=${encodeURIComponent(keyword)}`;
+        await page.goto(url, { waitUntil: 'networkidle0' });
+
+        // 스크린샷 저장
+        const screenshotPath = `screenshots/${keyword}.png`;
+        await page.screenshot({ path: screenshotPath });
+
+        const keywordResults = [];
+
+        // 이벤트 목록 탐색
+        const eventElements = await page.$x('/html/body/div[1]/div/div/main/div/main/div/div[1]/main/div[3]/div[2]/ul/div/a');
+        
+        for (let i = 0; i < eventElements.length; i++) {
+            const element = eventElements[i];
+            const clinicNameElements = await element.$x('./div/div[1]/div[1]/span');
+            
+            if (clinicNameElements.length > 0) {
+                const clinicName = await page.evaluate(el => el.textContent.trim(), clinicNameElements[0]);
+
+                if (clinicName === TARGET_CLINIC_NAME) {
+                    const rank = i + 1;
+                    const eventNameElements = await element.$x('./div/div[1]/div[1]/h2');
+                    const starRatingElements = await element.$x('./div/div[1]/div[2]/span[1]');
+                    const reviewCountElements = await element.$x('./div/div[1]/div[2]/span[2]');
+
+                    const eventName = eventNameElements.length > 0 ? await page.evaluate(el => el.textContent.trim(), eventNameElements[0]) : 'N/A';
+                    const starRating = starRatingElements.length > 0 ? await page.evaluate(el => el.textContent.trim(), starRatingElements[0]) : 'N/A';
+                    const reviewCount = reviewCountElements.length > 0 ? await page.evaluate(el => el.textContent.trim(), reviewCountElements[0]) : 'N/A';
+                    
+                    keywordResults.push({
+                        rank,
+                        eventName,
+                        starRating,
+                        reviewCount,
+                    });
+                }
+            }
+        }
+        
+        if (keywordResults.length > 0) {
+            resultsByKeyword[keyword] = keywordResults;
+        }
+    }
+
+    await browser.close();
+
+    await sendJandiNotification(resultsByKeyword);
+    
+    console.log('작업 완료');
+}
+
+async function sendJandiNotification(results) {
+    console.log('Jandi로 결과 전송 중...');
+    
+    let messageBody = '';
+    for (const keyword in results) {
+        messageBody += `### 🦷 ${keyword}\n`;
+        const screenshotUrl = `${GITHUB_REPO_URL}/screenshots/${keyword}.png`;
+
+        results[keyword].forEach(item => {
+            messageBody += `**${item.eventName}**\n`;
+            messageBody += `* 순위: **${item.rank}위**\n`;
+            messageBody += `* 별점: ${item.starRating}\n`;
+            messageBody += `* 리뷰: ${item.reviewCount}\n`;
+        });
+        messageBody += `[스크린샷 보기](${screenshotUrl})\n\n`;
+    }
+
+    if (messageBody === '') {
+        messageBody = '금일 강남언니 이벤트 목록에서 해당 병원을 찾지 못했습니다.';
+    }
+
+    const payload = {
+        body: `## 굿닥/강남언니 키워드 순위 리포트 (${new Date().toLocaleDateString('ko-KR')})`,
+        connectColor: '#00B8D9',
+        connectInfo: [
+            {
+                title: '키워드별 순위',
+                description: messageBody
+            }
+        ]
+    };
+
+    try {
+        await axios.post(JANDI_WEBHOOK_URL, payload, {
+            headers: {
+                'Accept': 'application/vnd.tosslab.jandi-v2+json',
+                'Content-Type': 'application/json'
+            }
+        });
+        console.log('Jandi 알림 전송 성공');
+    } catch (error) {
+        console.error('Jandi 알림 전송 실패:', error.message);
+    }
+}
+
+main().catch(error => {
+    console.error('스크립트 실행 중 오류 발생:', error);
+    process.exit(1);
+});
