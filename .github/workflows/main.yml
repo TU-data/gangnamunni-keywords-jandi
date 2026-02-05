@@ -5,6 +5,9 @@ on:
     - cron: '0 23 * * *' # 매일 오전 8시 KST (23:00 UTC)
   workflow_dispatch: # 수동 실행을 위한 옵션
 
+permissions:
+  contents: write
+
 jobs:
   scrape_and_report:
     runs-on: ubuntu-latest
