@@ -49,40 +49,34 @@ async function main() {
         const screenshotPath = `screenshots/${keyword}.png`;
         await page.screenshot({ path: screenshotPath });
 
-        const keywordResults = [];
-
-        // 이벤트 목록 탐색
-        const eventElements = await page.mainFrame().$x('/html/body/div[1]/div/div/main/div/main/div/div[1]/main/div[3]/div[2]/ul/div/a');
-        
-        for (let i = 0; i < eventElements.length; i++) {
-            const element = eventElements[i];
-            const clinicNameElements = await element.$x('./div/div[1]/div[1]/span');
+        const results = await page.evaluate((TARGET_CLINIC_NAME) => {
+            const scrapedData = [];
+            const eventNodes = document.evaluate('/html/body/div[1]/div/div/main/div/main/div/div[1]/main/div[3]/div[2]/ul/div/a', document, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
             
-            if (clinicNameElements.length > 0) {
-                const clinicName = await page.evaluate(el => el.textContent.trim(), clinicNameElements[0]);
+            let node;
+            let rank = 1;
+            while ((node = eventNodes.iterateNext())) {
+                const clinicNameNode = document.evaluate('.//div/div[1]/div[1]/span', node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+                
+                if (clinicNameNode && clinicNameNode.textContent.trim() === TARGET_CLINIC_NAME) {
+                    const eventNameNode = document.evaluate('.//div/div[1]/div[1]/h2', node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+                    const starRatingNode = document.evaluate('.//div/div[1]/div[2]/span[1]', node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+                    const reviewCountNode = document.evaluate('.//div/div[1]/div[2]/span[2]', node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
 
-                if (clinicName === TARGET_CLINIC_NAME) {
-                    const rank = i + 1;
-                    const eventNameElements = await element.$x('./div/div[1]/div[1]/h2');
-                    const starRatingElements = await element.$x('./div/div[1]/div[2]/span[1]');
-                    const reviewCountElements = await element.$x('./div/div[1]/div[2]/span[2]');
-
-                    const eventName = eventNameElements.length > 0 ? await page.evaluate(el => el.textContent.trim(), eventNameElements[0]) : 'N/A';
-                    const starRating = starRatingElements.length > 0 ? await page.evaluate(el => el.textContent.trim(), starRatingElements[0]) : 'N/A';
-                    const reviewCount = reviewCountElements.length > 0 ? await page.evaluate(el => el.textContent.trim(), reviewCountElements[0]) : 'N/A';
-                    
-                    keywordResults.push({
-                        rank,
-                        eventName,
-                        starRating,
-                        reviewCount,
+                    scrapedData.push({
+                        rank: rank,
+                        eventName: eventNameNode ? eventNameNode.textContent.trim() : 'N/A',
+                        starRating: starRatingNode ? starRatingNode.textContent.trim() : 'N/A',
+                        reviewCount: reviewCountNode ? reviewCountNode.textContent.trim() : 'N/A',
                     });
                 }
+                rank++;
             }
-        }
-        
-        if (keywordResults.length > 0) {
-            resultsByKeyword[keyword] = keywordResults;
+            return scrapedData;
+        }, TARGET_CLINIC_NAME);
+
+        if (results.length > 0) {
+            resultsByKeyword[keyword] = results;
         }
     }
 
