@@ -51,7 +51,8 @@ async function main() {
     });
 
     // 봇 탐지 우회를 위한 User-Agent 및 헤더 설정
-    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
+    // robots.txt에서 허용하는 Googlebot으로 위장
+    await page.setUserAgent('Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)');
     await page.setExtraHTTPHeaders({ 'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7' });
 
     // 디버깅을 위해 브라우저 콘솔 로그를 Node.js 터미널로 출력
