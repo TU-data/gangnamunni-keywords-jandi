@@ -142,12 +142,36 @@ async function main() {
             // 페이지 로딩 후 추가 대기
             await randomDelay(2000, 4000);
 
-            // 실제 사용자처럼 스크롤
-            await humanLikeScroll(page);
-
-            // 스크린샷 저장
+            // 스크린샷 저장 (더보기 버튼 누르기 전)
             const screenshotPath = `screenshots/${keyword}.png`;
             await page.screenshot({ path: screenshotPath, fullPage: true });
+
+            // 더보기 버튼 클릭하여 모든 리스트 로드
+            console.log(`'${keyword}' 더보기 버튼 확인 중...`);
+            let clickCount = 0;
+            while (true) {
+                try {
+                    // 더보기 버튼 찾기 (여러 방법으로 시도)
+                    const moreButton = await page.$x('//main//button[contains(text(), "더보기") or contains(text(), "더 보기") or contains(., "더보기")]');
+
+                    if (moreButton.length > 0) {
+                        clickCount++;
+                        console.log(`더보기 버튼 ${clickCount}번째 클릭`);
+                        await moreButton[0].click();
+                        // 로딩 대기 (실제 사용자처럼)
+                        await randomDelay(2000, 3000);
+                    } else {
+                        console.log('더보기 버튼 없음 - 모든 리스트 로드 완료');
+                        break;
+                    }
+                } catch (e) {
+                    console.log('더보기 버튼 클릭 종료:', e.message);
+                    break;
+                }
+            }
+
+            // 실제 사용자처럼 스크롤 (봇 탐지 방지)
+            await humanLikeScroll(page);
 
             const results = await page.evaluate((TARGET_CLINIC_NAME) => {
                 const scrapedData = [];

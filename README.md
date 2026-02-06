@@ -24,6 +24,7 @@
 4. 병원 이름 Xpath : /html/body/div[1]/div/div/main/div/main/div/div[1]/main/div[3]/div[2]/ul/div/a[4]/div/div[1]/div[1]/span
 5. 별점 정보 Xpath : /html/body/div[1]/div/div/main/div/main/div/div[1]/main/div[3]/div[2]/ul/div/a[4]/div/div[1]/div[2]/span[1]
 6. 리뷰 개수 Xpath : /html/body/div[1]/div/div/main/div/main/div/div[1]/main/div[3]/div[2]/ul/div/a[4]/div/div[1]/div[2]/span[2]
+7. 더보기 버튼 Xpath : /html/body/div[1]/div/div/main/div/main/div/div[1]/main/div[3]/div[3]/button
 
 ### 스크린샷
 1. 웹 첫 페이지로 찍으면 됌
