@@ -73,11 +73,16 @@ async function main() {
             '--disable-accelerated-2d-canvas',
             '--disable-gpu',
             '--window-size=1920,1080',
-            '--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+            '--disable-web-security',
+            '--disable-features=IsolateOrigins,site-per-process',
+            '--disable-site-isolation-trials'
         ]
     });
 
     const page = await browser.newPage();
+
+    // User-Agent 설정 (최신 Chrome)
+    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
 
     // 뷰포트 설정
     await page.setViewport({ width: 1920, height: 1080 });
@@ -94,6 +99,37 @@ async function main() {
         'Sec-Fetch-Site': 'none',
         'Sec-Fetch-User': '?1',
         'Cache-Control': 'max-age=0'
+    });
+
+    // 추가 봇 탐지 우회 설정
+    await page.evaluateOnNewDocument(() => {
+        // WebDriver 감지 우회
+        Object.defineProperty(navigator, 'webdriver', {
+            get: () => false,
+        });
+
+        // Chrome 객체 추가
+        window.chrome = {
+            runtime: {},
+        };
+
+        // Permissions API 우회
+        const originalQuery = window.navigator.permissions.query;
+        window.navigator.permissions.query = (parameters) => (
+            parameters.name === 'notifications' ?
+                Promise.resolve({ state: Notification.permission }) :
+                originalQuery(parameters)
+        );
+
+        // Plugin 배열 설정
+        Object.defineProperty(navigator, 'plugins', {
+            get: () => [1, 2, 3, 4, 5],
+        });
+
+        // Languages 설정
+        Object.defineProperty(navigator, 'languages', {
+            get: () => ['ko-KR', 'ko', 'en-US', 'en'],
+        });
     });
 
     // 디버깅을 위해 브라우저 콘솔 로그를 Node.js 터미널로 출력
@@ -149,11 +185,22 @@ async function main() {
             // 더보기 버튼 클릭하여 무한 스크롤 활성화
             console.log(`'${keyword}' 더보기 버튼 확인 중...`);
             try {
-                const moreButton = await page.$x('//main//button[contains(text(), "더보기") or contains(text(), "더 보기") or contains(., "더보기")]');
+                const hasMoreButton = await page.evaluate(() => {
+                    const buttons = Array.from(document.querySelectorAll('main button'));
+                    const button = buttons.find(btn =>
+                        btn.textContent.includes('더보기') ||
+                        btn.textContent.includes('더 보기') ||
+                        btn.textContent.includes('더보기')
+                    );
+                    if (button) {
+                        button.click();
+                        return true;
+                    }
+                    return false;
+                });
 
-                if (moreButton.length > 0) {
+                if (hasMoreButton) {
                     console.log('더보기 버튼 클릭 - 무한 스크롤 활성화');
-                    await moreButton[0].click();
                     await randomDelay(1000, 2000);
                 } else {
                     console.log('더보기 버튼 없음');
