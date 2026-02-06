@@ -1,0 +1,141 @@
+User-Agent: Googlebot
+Allow: /
+Disallow: /static/
+Disallow: /*.js$
+Disallow: /*.css$
+Disallow: /*.woff2$
+Disallow: /*.woff$
+Disallow: /*.ttf$
+Disallow: /*.eot$
+Disallow: /*.svg$
+Disallow: /*.png$
+Disallow: /*.jpg$
+
+User-Agent: Googlebot-Mobile
+Allow: /
+Disallow: /static/
+Disallow: /*.js$
+Disallow: /*.css$
+Disallow: /*.woff2$
+Disallow: /*.woff$
+Disallow: /*.ttf$
+Disallow: /*.eot$
+Disallow: /*.svg$
+Disallow: /*.png$
+Disallow: /*.jpg$
+
+User-Agent: Googlebot-Image
+Allow: /
+Disallow: /static/
+Disallow: /*.js$
+Disallow: /*.css$
+Disallow: /*.woff2$
+Disallow: /*.woff$
+Disallow: /*.ttf$
+Disallow: /*.eot$
+Disallow: /*.svg$
+Disallow: /*.png$
+Disallow: /*.jpg$
+
+User-Agent: Googlebot-Video
+Allow: /
+Disallow: /static/
+Disallow: /*.js$
+Disallow: /*.css$
+Disallow: /*.woff2$
+Disallow: /*.woff$
+Disallow: /*.ttf$
+Disallow: /*.eot$
+Disallow: /*.svg$
+Disallow: /*.png$
+Disallow: /*.jpg$
+
+User-Agent: Google-Extended
+Allow: /
+Disallow: /static/
+Disallow: /*.js$
+Disallow: /*.css$
+Disallow: /*.woff2$
+Disallow: /*.woff$
+Disallow: /*.ttf$
+Disallow: /*.eot$
+Disallow: /*.svg$
+Disallow: /*.png$
+Disallow: /*.jpg$
+
+User-Agent: Yeti
+Allow: /
+Disallow: /static/
+
+User-Agent: Bingbot
+Allow: /
+Disallow: /static/
+
+User-Agent: Slurp
+Allow: /
+Disallow: /static/
+
+User-Agent: Twitterbot
+Allow: /
+Disallow: /static/
+
+User-Agent: facebookexternalhit
+Allow: /
+Disallow: /static/
+
+User-Agent: Applebot
+Allow: /
+Disallow: /static/
+
+User-Agent: ChatGPT-User
+Allow: /
+Disallow: /static/
+
+User-Agent: GPTBot
+Allow: /
+Disallow: /static/
+
+User-Agent: Anthropic-AI
+Allow: /
+Disallow: /static/
+
+User-Agent: Instagrambot
+Allow: /
+Disallow: /static/
+
+User-Agent: LinkedInBot
+Allow: /
+Disallow: /static/
+
+User-Agent: Pinterest
+Allow: /
+Disallow: /static/
+
+User-Agent: CCBot
+Allow: /
+Disallow: /static/
+
+User-Agent: DuckDuckBot
+Allow: /
+Disallow: /static/
+
+User-Agent: Baiduspider
+Allow: /
+Disallow: /static/
+
+User-Agent: YandexBot
+Allow: /
+Disallow: /static/
+
+User-Agent: Sogou-Web-Crawler
+Allow: /
+Disallow: /static/
+
+User-Agent: Exabot
+Allow: /
+Disallow: /static/
+
+User-Agent: *
+Disallow: /
+
+Sitemap: https://www.gangnamunni.com/sitemap.xml

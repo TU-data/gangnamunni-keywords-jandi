@@ -1,7 +1,11 @@
 require('dotenv').config();
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const axios = require('axios');
 const fs = require('fs');
+
+// Stealth 플러그인 추가 - 봇 탐지 우회
+puppeteer.use(StealthPlugin());
 
 const JANDI_WEBHOOK_URL = process.env.JANDI_WEBHOOK_URL;
 const TARGET_CLINIC_NAME = 'TU치과의원';
@@ -23,6 +27,33 @@ if (!JANDI_WEBHOOK_URL) {
 
 const GITHUB_REPO_URL = `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY}/${process.env.GITHUB_REF_NAME}`;
 
+// 랜덤 대기 함수 (더 긴 시간)
+async function randomDelay(min = 5000, max = 10000) {
+    const delay = Math.floor(Math.random() * (max - min + 1)) + min;
+    console.log(`봇 탐지 방지를 위해 ${delay}ms 대기...`);
+    await new Promise(resolve => setTimeout(resolve, delay));
+}
+
+// 실제 사용자처럼 페이지 스크롤
+async function humanLikeScroll(page) {
+    await page.evaluate(async () => {
+        await new Promise((resolve) => {
+            let totalHeight = 0;
+            const distance = 100;
+            const timer = setInterval(() => {
+                const scrollHeight = document.body.scrollHeight;
+                window.scrollBy(0, distance);
+                totalHeight += distance;
+
+                if (totalHeight >= scrollHeight / 2) {
+                    clearInterval(timer);
+                    resolve();
+                }
+            }, 100);
+        });
+    });
+}
+
 async function main() {
     // 스크린샷 디렉토리 생성
     if (!fs.existsSync('screenshots')) {
@@ -37,112 +68,149 @@ async function main() {
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
-            '--disable-blink-features=AutomationControlled'
+            '--disable-blink-features=AutomationControlled',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--disable-gpu',
+            '--window-size=1920,1080',
+            '--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
         ]
     });
-    
+
     const page = await browser.newPage();
 
-    // 봇 탐지 우회 설정: webdriver 프로퍼티 숨기기
-    await page.evaluateOnNewDocument(() => {
-        Object.defineProperty(navigator, 'webdriver', {
-            get: () => false,
-        });
-    });
+    // 뷰포트 설정
+    await page.setViewport({ width: 1920, height: 1080 });
 
-    // 봇 탐지 우회를 위한 User-Agent 및 헤더 설정
-    // robots.txt에서 허용하는 Googlebot으로 위장
-    await page.setUserAgent('Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)');
-    await page.setExtraHTTPHeaders({ 'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7' });
+    // 추가 헤더 설정
+    await page.setExtraHTTPHeaders({
+        'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Cache-Control': 'max-age=0'
+    });
 
     // 디버깅을 위해 브라우저 콘솔 로그를 Node.js 터미널로 출력
     page.on('console', msg => console.log('PAGE LOG:', msg.text()));
-    await page.setViewport({ width: 1280, height: 800 });
 
     // 메인 페이지 접속 테스트
     console.log('메인 페이지 접속 테스트 중...');
     try {
-        const mainResponse = await page.goto('https://www.gangnamunni.com/', { waitUntil: 'networkidle0' });
+        const mainResponse = await page.goto('https://www.gangnamunni.com/', {
+            waitUntil: 'networkidle2',
+            timeout: 60000
+        });
         console.log(`메인 페이지 응답 코드: ${mainResponse.status()}`);
+
+        // 실제 사용자처럼 잠시 대기
+        await randomDelay(3000, 5000);
+
+        // 페이지 스크롤
+        await humanLikeScroll(page);
+
         await page.screenshot({ path: 'screenshots/main_page_test.png' });
+        console.log('메인 페이지 접속 성공');
     } catch (e) {
-        console.error('메인 페이지 접속 실패:', e);
+        console.error('메인 페이지 접속 실패:', e.message);
     }
 
     for (const keyword of KEYWORDS) {
-        // 첫 번째 키워드가 아니면 검색 전에 잠시 대기 (봇 탐지 방지)
+        // 각 키워드 검색 전 충분한 대기 (5-10초)
         if (keyword !== KEYWORDS[0]) {
-            const delayTime = Math.floor(Math.random() * 3000) + 2000; // 2초 ~ 5초 랜덤 대기
-            console.log(`봇 탐지 방지를 위해 ${delayTime}ms 대기...`);
-            await new Promise(r => setTimeout(r, delayTime));
+            await randomDelay(5000, 10000);
+        } else {
+            // 첫 번째 키워드도 잠시 대기
+            await randomDelay(3000, 5000);
         }
 
         console.log(`'${keyword}' 키워드 검색 중...`);
         const url = `https://www.gangnamunni.com/events?q=${encodeURIComponent(keyword)}`;
-        const response = await page.goto(url, { waitUntil: 'networkidle0' });
-        console.log(`'${keyword}' 응답 코드: ${response.status()}`);
 
-        // 스크린샷 저장
-        const screenshotPath = `screenshots/${keyword}.png`;
-        await page.screenshot({ path: screenshotPath });
+        try {
+            const response = await page.goto(url, {
+                waitUntil: 'networkidle2',
+                timeout: 60000
+            });
+            console.log(`'${keyword}' 응답 코드: ${response.status()}`);
 
-        const results = await page.evaluate((TARGET_CLINIC_NAME) => {
-            const scrapedData = [];
-            // XPath를 절대 경로에서 상대 경로로 변경하여 구조 변경에 유연하게 대응 (메인 영역 내의 리스트 아이템)
-            const eventNodes = document.evaluate('//main//ul/div/a', document, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
-            
-            let node;
-            let rank = 1;
-            while ((node = eventNodes.iterateNext())) {
-                const clinicNameNode = document.evaluate('.//div/div[1]/div[1]/span', node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-                
-                // 병원 이름이 포함되어 있는지 확인 (부분 일치 허용)
-                if (clinicNameNode && clinicNameNode.textContent.includes(TARGET_CLINIC_NAME)) {
-                    const eventNameNode = document.evaluate('.//div/div[1]/div[1]/h2', node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-                    const starRatingNode = document.evaluate('.//div/div[1]/div[2]/span[1]', node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-                    const reviewCountNode = document.evaluate('.//div/div[1]/div[2]/span[2]', node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+            // 페이지 로딩 후 추가 대기
+            await randomDelay(2000, 4000);
 
-                    scrapedData.push({
-                        rank: rank,
-                        eventName: eventNameNode ? eventNameNode.textContent.trim() : 'N/A',
-                        starRating: starRatingNode ? starRatingNode.textContent.trim() : 'N/A',
-                        reviewCount: reviewCountNode ? reviewCountNode.textContent.trim() : 'N/A',
-                    });
+            // 실제 사용자처럼 스크롤
+            await humanLikeScroll(page);
+
+            // 스크린샷 저장
+            const screenshotPath = `screenshots/${keyword}.png`;
+            await page.screenshot({ path: screenshotPath, fullPage: false });
+
+            const results = await page.evaluate((TARGET_CLINIC_NAME) => {
+                const scrapedData = [];
+                // XPath를 절대 경로에서 상대 경로로 변경하여 구조 변경에 유연하게 대응
+                const eventNodes = document.evaluate('//main//ul/div/a', document, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
+
+                let node;
+                let rank = 1;
+                while ((node = eventNodes.iterateNext())) {
+                    const clinicNameNode = document.evaluate('.//div/div[1]/div[1]/span', node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+
+                    // 병원 이름이 포함되어 있는지 확인 (부분 일치 허용)
+                    if (clinicNameNode && clinicNameNode.textContent.includes(TARGET_CLINIC_NAME)) {
+                        const eventNameNode = document.evaluate('.//div/div[1]/div[1]/h2', node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+                        const starRatingNode = document.evaluate('.//div/div[1]/div[2]/span[1]', node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+                        const reviewCountNode = document.evaluate('.//div/div[1]/div[2]/span[2]', node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+
+                        scrapedData.push({
+                            rank: rank,
+                            eventName: eventNameNode ? eventNameNode.textContent.trim() : 'N/A',
+                            starRating: starRatingNode ? starRatingNode.textContent.trim() : 'N/A',
+                            reviewCount: reviewCountNode ? reviewCountNode.textContent.trim() : 'N/A',
+                        });
+                    }
+                    rank++;
                 }
-                rank++;
-            }
-            return scrapedData;
-        }, TARGET_CLINIC_NAME);
+                return scrapedData;
+            }, TARGET_CLINIC_NAME);
 
-        resultsByKeyword[keyword] = results;
+            resultsByKeyword[keyword] = results;
+            console.log(`'${keyword}' 검색 완료: ${results.length}개 결과 발견`);
+        } catch (e) {
+            console.error(`'${keyword}' 검색 실패:`, e.message);
+            resultsByKeyword[keyword] = [];
+        }
     }
 
     await browser.close();
 
     await sendJandiNotification(resultsByKeyword);
-    
+
     console.log('작업 완료');
 }
 
 async function sendJandiNotification(results) {
     console.log('Jandi로 결과 전송 중...');
-    
+
     let messageBody = '';
     for (const keyword of KEYWORDS) {
-        messageBody += `### 🦷 ${keyword}\n`;
+        messageBody += `### 🦷 ${keyword}\\n`;
         const screenshotUrl = `${GITHUB_REPO_URL}/screenshots/${encodeURIComponent(keyword)}.png`;
 
         if (results[keyword] && results[keyword].length > 0) {
             results[keyword].forEach(item => {
-                messageBody += `**[${item.eventName}]**\n`;
-                messageBody += `* 순위: **${item.rank}위**\n`;
-                messageBody += `* 별점: ${item.starRating}\n`;
-                messageBody += `* 리뷰: ${item.reviewCount}\n`;
+                messageBody += `**[${item.eventName}]**\\n`;
+                messageBody += `* 순위: **${item.rank}위**\\n`;
+                messageBody += `* 별점: ${item.starRating}\\n`;
+                messageBody += `* 리뷰: ${item.reviewCount}\\n`;
             });
         } else {
-            messageBody += '리스트에 없음\n';
+            messageBody += '❌ **리스트에 없음**\\n';
         }
-        messageBody += `[스크린샷 보기](${screenshotUrl})\n\n`;
+        messageBody += `[스크린샷 보기](${screenshotUrl})\\n\\n`;
     }
 
     if (messageBody === '') {
