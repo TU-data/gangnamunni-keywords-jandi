@@ -146,32 +146,52 @@ async function main() {
             const screenshotPath = `screenshots/${keyword}.png`;
             await page.screenshot({ path: screenshotPath, fullPage: true });
 
-            // 더보기 버튼 클릭하여 모든 리스트 로드
+            // 더보기 버튼 클릭하여 무한 스크롤 활성화
             console.log(`'${keyword}' 더보기 버튼 확인 중...`);
-            let clickCount = 0;
-            while (true) {
-                try {
-                    // 더보기 버튼 찾기 (여러 방법으로 시도)
-                    const moreButton = await page.$x('//main//button[contains(text(), "더보기") or contains(text(), "더 보기") or contains(., "더보기")]');
+            try {
+                const moreButton = await page.$x('//main//button[contains(text(), "더보기") or contains(text(), "더 보기") or contains(., "더보기")]');
 
-                    if (moreButton.length > 0) {
-                        clickCount++;
-                        console.log(`더보기 버튼 ${clickCount}번째 클릭`);
-                        await moreButton[0].click();
-                        // 로딩 대기 (실제 사용자처럼)
-                        await randomDelay(2000, 3000);
-                    } else {
-                        console.log('더보기 버튼 없음 - 모든 리스트 로드 완료');
-                        break;
-                    }
-                } catch (e) {
-                    console.log('더보기 버튼 클릭 종료:', e.message);
-                    break;
+                if (moreButton.length > 0) {
+                    console.log('더보기 버튼 클릭 - 무한 스크롤 활성화');
+                    await moreButton[0].click();
+                    await randomDelay(1000, 2000);
+                } else {
+                    console.log('더보기 버튼 없음');
                 }
+            } catch (e) {
+                console.log('더보기 버튼 처리 중 오류:', e.message);
             }
 
-            // 실제 사용자처럼 스크롤 (봇 탐지 방지)
-            await humanLikeScroll(page);
+            // 스크롤하면서 모든 리스트 로드 (무한 스크롤)
+            console.log('무한 스크롤로 모든 리스트 로딩 중...');
+            let previousHeight = 0;
+            let currentHeight = await page.evaluate(() => document.body.scrollHeight);
+            let scrollAttempts = 0;
+            const maxScrollAttempts = 15; // 최대 15번 스크롤 시도
+
+            while (scrollAttempts < maxScrollAttempts) {
+                // 맨 아래로 스크롤
+                await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+
+                // 로딩 대기 (실제 사용자처럼)
+                await randomDelay(2000, 3000);
+
+                // 높이 변화 확인
+                previousHeight = currentHeight;
+                currentHeight = await page.evaluate(() => document.body.scrollHeight);
+
+                if (currentHeight === previousHeight) {
+                    console.log('더 이상 로드할 리스트 없음 - 완료');
+                    break;
+                }
+
+                scrollAttempts++;
+                console.log(`스크롤 진행 중... (${scrollAttempts}/${maxScrollAttempts}) - 높이: ${currentHeight}px`);
+            }
+
+            // 맨 위로 스크롤백 (결과 파싱 전)
+            await page.evaluate(() => window.scrollTo(0, 0));
+            await randomDelay(1000, 2000);
 
             const results = await page.evaluate((TARGET_CLINIC_NAME) => {
                 const scrapedData = [];
