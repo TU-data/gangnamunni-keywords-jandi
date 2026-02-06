@@ -114,7 +114,7 @@ async function main() {
         // 페이지 스크롤
         await humanLikeScroll(page);
 
-        await page.screenshot({ path: 'screenshots/main_page_test.png' });
+        await page.screenshot({ path: 'screenshots/main_page_test.png', fullPage: true });
         console.log('메인 페이지 접속 성공');
     } catch (e) {
         console.error('메인 페이지 접속 실패:', e.message);
@@ -147,7 +147,7 @@ async function main() {
 
             // 스크린샷 저장
             const screenshotPath = `screenshots/${keyword}.png`;
-            await page.screenshot({ path: screenshotPath, fullPage: false });
+            await page.screenshot({ path: screenshotPath, fullPage: true });
 
             const results = await page.evaluate((TARGET_CLINIC_NAME) => {
                 const scrapedData = [];
@@ -197,20 +197,20 @@ async function sendJandiNotification(results) {
 
     let messageBody = '';
     for (const keyword of KEYWORDS) {
-        messageBody += `### 🦷 ${keyword}\\n`;
+        messageBody += `### 🦷 ${keyword}\n`;
         const screenshotUrl = `${GITHUB_REPO_URL}/screenshots/${encodeURIComponent(keyword)}.png`;
 
         if (results[keyword] && results[keyword].length > 0) {
             results[keyword].forEach(item => {
-                messageBody += `**[${item.eventName}]**\\n`;
-                messageBody += `* 순위: **${item.rank}위**\\n`;
-                messageBody += `* 별점: ${item.starRating}\\n`;
-                messageBody += `* 리뷰: ${item.reviewCount}\\n`;
+                messageBody += `**[${item.eventName}]**\n`;
+                messageBody += `* 순위: **${item.rank}위**\n`;
+                messageBody += `* 별점: ${item.starRating}\n`;
+                messageBody += `* 리뷰: ${item.reviewCount}\n`;
             });
         } else {
-            messageBody += '❌ **리스트에 없음**\\n';
+            messageBody += '❌ **리스트에 없음**\n';
         }
-        messageBody += `[스크린샷 보기](${screenshotUrl})\\n\\n`;
+        messageBody += `[스크린샷 보기](${screenshotUrl})\n\n`;
     }
 
     if (messageBody === '') {
