@@ -47,9 +47,6 @@
         - 별점 : 9.9
         - 리뷰개수 : 1,235개
 
-### 잔디 웹 훅 URL 
-https://wh.jandi.com/connect-api/webhook/20553989/8ab6e7bb93adb3d097e21780d34bce79
-
 
 ### 비고
 1. 하나의 키워드에서 우리 병원이 여러 이벤트가 있을 수 있다
