@@ -2,7 +2,7 @@ name: GangnamUnni Keyword Scraper
 
 on:
   schedule:
-    - cron: '0 23 * * *' # 매일 오전 8시 KST (23:00 UTC)
+    - cron: '45 0 * * *' # 매일 오전 9시 45분 KST (00:45 UTC)
   workflow_dispatch: # 수동 실행을 위한 옵션
 
 permissions:
