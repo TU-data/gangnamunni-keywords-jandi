@@ -186,14 +186,12 @@ async function main() {
             console.log(`'${keyword}' 더보기 버튼 확인 중...`);
             try {
                 const hasMoreButton = await page.evaluate(() => {
-                    const buttons = Array.from(document.querySelectorAll('main button'));
-                    const button = buttons.find(btn =>
-                        btn.textContent.includes('더보기') ||
-                        btn.textContent.includes('더 보기') ||
-                        btn.textContent.includes('더보기')
-                    );
-                    if (button) {
-                        button.click();
+                    // 더보기는 <a> 태그 (버튼 아님)
+                    const xpath = '//main//a[contains(text(), "더보기")]';
+                    const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                    const link = result.singleNodeValue;
+                    if (link) {
+                        link.click();
                         return true;
                     }
                     return false;
@@ -254,13 +252,13 @@ async function main() {
                     if (clinicNameNode && clinicNameNode.textContent.includes(TARGET_CLINIC_NAME)) {
                         const eventNameNode = document.evaluate('.//div/div[1]/div[1]/h2', node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
                         const starRatingNode = document.evaluate('.//div/div[1]/div[2]/span[1]', node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-                        const reviewCountNode = document.evaluate('.//div/div[1]/div[2]/span[2]', node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+                        const reviewCountNode = document.evaluate('.//div/div[1]/div[2]/span[2]/text()[2]', node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
 
                         scrapedData.push({
                             rank: rank,
                             eventName: eventNameNode ? eventNameNode.textContent.trim() : 'N/A',
                             starRating: starRatingNode ? starRatingNode.textContent.trim() : 'N/A',
-                            reviewCount: reviewCountNode ? reviewCountNode.textContent.trim() : 'N/A',
+                            reviewCount: reviewCountNode ? reviewCountNode.nodeValue.trim() : 'N/A',
                         });
                     }
                     rank++;
