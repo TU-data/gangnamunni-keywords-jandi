@@ -25,7 +25,6 @@ if (!JANDI_WEBHOOK_URL) {
     process.exit(1);
 }
 
-const GITHUB_REPO_URL = `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY}/${process.env.GITHUB_REF_NAME}`;
 
 // 랜덤 대기 함수 (더 긴 시간)
 async function randomDelay(min = 5000, max = 10000) {
@@ -287,7 +286,6 @@ async function sendJandiNotification(results) {
     let messageBody = '';
     for (const keyword of KEYWORDS) {
         messageBody += `### 🦷 ${keyword}\n`;
-        const screenshotUrl = `${GITHUB_REPO_URL}/screenshots/${encodeURIComponent(keyword)}.png`;
 
         if (results[keyword] && results[keyword].length > 0) {
             results[keyword].forEach(item => {
@@ -299,7 +297,7 @@ async function sendJandiNotification(results) {
         } else {
             messageBody += '❌ **리스트에 없음**\n';
         }
-        messageBody += `[스크린샷 보기](${screenshotUrl})\n\n`;
+        messageBody += '\n';
     }
 
     if (messageBody === '') {
