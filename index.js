@@ -59,36 +59,31 @@ async function scrapeAll() {
             await page.screenshot({ path: `screenshots/${keyword}.png`, fullPage: true });
             console.log(`'${keyword}' 스크린샷 저장 완료`);
 
-            // __NEXT_DATA__ 파싱
-            const serviceOffers = await page.evaluate(() => {
+            // __NEXT_DATA__ 파싱 + 필터링을 브라우저 안에서 완료 (직렬화 크기 최소화)
+            const { results, totalCount } = await page.evaluate((targetName) => {
                 const el = document.getElementById('__NEXT_DATA__');
-                if (!el) return [];
+                if (!el) return { results: [], totalCount: 0 };
                 const json = JSON.parse(el.textContent);
-                return json.props?.pageProps?.data?.serviceOffers ?? [];
-            });
+                const serviceOffers = json.props?.pageProps?.data?.serviceOffers ?? [];
+                const totalCount = json.props?.pageProps?.data?.serviceOfferPagination?.recordsTotal ?? 0;
 
-            const totalCount = await page.evaluate(() => {
-                const el = document.getElementById('__NEXT_DATA__');
-                if (!el) return 0;
-                const json = JSON.parse(el.textContent);
-                return json.props?.pageProps?.data?.serviceOfferPagination?.recordsTotal ?? 0;
-            });
+                const results = [];
+                serviceOffers.forEach((item, index) => {
+                    const offer = item.serviceOffer;
+                    const clinicName = offer?.hospital?.name ?? '';
+                    if (clinicName.includes(targetName)) {
+                        results.push({
+                            rank: index + 1,
+                            eventName: offer?.title ?? 'N/A',
+                            starRating: offer?.rating?.amount ?? 'N/A',
+                            reviewCount: offer?.rating?.count ?? 'N/A',
+                        });
+                    }
+                });
+                return { results, totalCount };
+            }, TARGET_CLINIC_NAME);
 
-            console.log(`'${keyword}' 전체 ${totalCount}개 중 상위 ${serviceOffers.length}개 로드`);
-
-            const results = [];
-            serviceOffers.forEach((item, index) => {
-                const offer = item.serviceOffer;
-                const clinicName = offer?.hospital?.name ?? '';
-                if (clinicName.includes(TARGET_CLINIC_NAME)) {
-                    results.push({
-                        rank: index + 1,
-                        eventName: offer?.title ?? 'N/A',
-                        starRating: offer?.rating?.amount ?? 'N/A',
-                        reviewCount: offer?.rating?.count ?? 'N/A',
-                    });
-                }
-            });
+            console.log(`'${keyword}' 전체 ${totalCount}개 중 상위 20개 로드`);
 
             resultsByKeyword[keyword] = results;
             console.log(`'${keyword}' 완료: ${results.length}개 결과`);
