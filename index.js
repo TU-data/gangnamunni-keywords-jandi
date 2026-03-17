@@ -4,7 +4,6 @@ const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const axios = require('axios');
 const fs = require('fs');
 
-// Stealth 플러그인 추가 - 봇 탐지 우회
 puppeteer.use(StealthPlugin());
 
 const JANDI_WEBHOOK_URL = process.env.JANDI_WEBHOOK_URL;
@@ -27,41 +26,47 @@ if (!JANDI_WEBHOOK_URL) {
 
 const GITHUB_REPO_URL = `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY}/${process.env.GITHUB_REF_NAME}`;
 
-// 랜덤 대기 함수 (더 긴 시간)
-async function randomDelay(min = 5000, max = 10000) {
-    const delay = Math.floor(Math.random() * (max - min + 1)) + min;
-    console.log(`봇 탐지 방지를 위해 ${delay}ms 대기...`);
-    await new Promise(resolve => setTimeout(resolve, delay));
-}
-
-// 실제 사용자처럼 페이지 스크롤
-async function humanLikeScroll(page) {
-    await page.evaluate(async () => {
-        await new Promise((resolve) => {
-            let totalHeight = 0;
-            const distance = 100;
-            const timer = setInterval(() => {
-                const scrollHeight = document.body.scrollHeight;
-                window.scrollBy(0, distance);
-                totalHeight += distance;
-
-                if (totalHeight >= scrollHeight / 2) {
-                    clearInterval(timer);
-                    resolve();
-                }
-            }, 100);
-        });
+// __NEXT_DATA__에서 키워드 검색 결과 파싱
+async function fetchKeywordResults(keyword) {
+    const url = `https://www.gangnamunni.com/events?q=${encodeURIComponent(keyword)}`;
+    const res = await axios.get(url, {
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            'Accept-Language': 'ko-KR,ko;q=0.9',
+        }
     });
+
+    const match = res.data.match(/<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/s);
+    if (!match) throw new Error('__NEXT_DATA__ 없음');
+
+    const json = JSON.parse(match[1]);
+    const serviceOffers = json.props?.pageProps?.data?.serviceOffers ?? [];
+    const totalCount = json.props?.pageProps?.data?.serviceOfferPagination?.recordsTotal ?? serviceOffers.length;
+
+    console.log(`'${keyword}' 전체 ${totalCount}개 중 상위 ${serviceOffers.length}개 로드`);
+
+    const results = [];
+    serviceOffers.forEach((item, index) => {
+        const offer = item.serviceOffer;
+        const clinicName = offer?.hospital?.name ?? '';
+        if (clinicName.includes(TARGET_CLINIC_NAME)) {
+            results.push({
+                rank: index + 1,
+                eventName: offer?.title ?? 'N/A',
+                starRating: offer?.rating?.amount ?? 'N/A',
+                reviewCount: offer?.rating?.count ?? 'N/A',
+            });
+        }
+    });
+
+    return results;
 }
 
-async function main() {
-    // 스크린샷 디렉토리 생성
+// Puppeteer는 스크린샷 전용
+async function takeScreenshots() {
     if (!fs.existsSync('screenshots')) {
         fs.mkdirSync('screenshots', { recursive: true });
     }
-
-    console.log('강남언니 키워드 순위 확인 시작');
-    const resultsByKeyword = {};
 
     const browser = await puppeteer.launch({
         headless: true,
@@ -70,215 +75,27 @@ async function main() {
             '--disable-setuid-sandbox',
             '--disable-blink-features=AutomationControlled',
             '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
             '--disable-gpu',
             '--window-size=1920,1080',
-            '--disable-web-security',
-            '--disable-features=IsolateOrigins,site-per-process',
-            '--disable-site-isolation-trials'
         ]
     });
 
     const page = await browser.newPage();
-
-    // User-Agent 설정 (최신 Chrome)
     await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
-
-    // 뷰포트 설정
     await page.setViewport({ width: 1920, height: 1080 });
 
-    // 추가 헤더 설정
-    await page.setExtraHTTPHeaders({
-        'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'none',
-        'Sec-Fetch-User': '?1',
-        'Cache-Control': 'max-age=0'
-    });
-
-    // 추가 봇 탐지 우회 설정
-    await page.evaluateOnNewDocument(() => {
-        // WebDriver 감지 우회
-        Object.defineProperty(navigator, 'webdriver', {
-            get: () => false,
-        });
-
-        // Chrome 객체 추가
-        window.chrome = {
-            runtime: {},
-        };
-
-        // Permissions API 우회
-        const originalQuery = window.navigator.permissions.query;
-        window.navigator.permissions.query = (parameters) => (
-            parameters.name === 'notifications' ?
-                Promise.resolve({ state: Notification.permission }) :
-                originalQuery(parameters)
-        );
-
-        // Plugin 배열 설정
-        Object.defineProperty(navigator, 'plugins', {
-            get: () => [1, 2, 3, 4, 5],
-        });
-
-        // Languages 설정
-        Object.defineProperty(navigator, 'languages', {
-            get: () => ['ko-KR', 'ko', 'en-US', 'en'],
-        });
-    });
-
-    // 디버깅을 위해 브라우저 콘솔 로그를 Node.js 터미널로 출력
-    page.on('console', msg => console.log('PAGE LOG:', msg.text()));
-
-    // 메인 페이지 접속 테스트
-    console.log('메인 페이지 접속 테스트 중...');
-    try {
-        const mainResponse = await page.goto('https://www.gangnamunni.com/', {
-            waitUntil: 'networkidle2',
-            timeout: 60000
-        });
-        console.log(`메인 페이지 응답 코드: ${mainResponse.status()}`);
-
-        // 실제 사용자처럼 잠시 대기
-        await randomDelay(3000, 5000);
-
-        // 페이지 스크롤
-        await humanLikeScroll(page);
-
-        await page.screenshot({ path: 'screenshots/main_page_test.png', fullPage: true });
-        console.log('메인 페이지 접속 성공');
-    } catch (e) {
-        console.error('메인 페이지 접속 실패:', e.message);
-    }
-
     for (const keyword of KEYWORDS) {
-        // 각 키워드 검색 전 충분한 대기 (5-10초)
-        if (keyword !== KEYWORDS[0]) {
-            await randomDelay(5000, 10000);
-        } else {
-            // 첫 번째 키워드도 잠시 대기
-            await randomDelay(3000, 5000);
-        }
-
-        console.log(`'${keyword}' 키워드 검색 중...`);
-        const url = `https://www.gangnamunni.com/events?q=${encodeURIComponent(keyword)}`;
-
         try {
-            const response = await page.goto(url, {
-                waitUntil: 'networkidle2',
-                timeout: 60000
-            });
-            console.log(`'${keyword}' 응답 코드: ${response.status()}`);
-
-            // 페이지 로딩 후 추가 대기
-            await randomDelay(2000, 4000);
-
-            // 스크린샷 저장 (더보기 버튼 누르기 전)
-            const screenshotPath = `screenshots/${keyword}.png`;
-            await page.screenshot({ path: screenshotPath, fullPage: true });
-
-            // 더보기 버튼 클릭하여 무한 스크롤 활성화
-            console.log(`'${keyword}' 더보기 버튼 확인 중...`);
-            try {
-                const hasMoreButton = await page.evaluate(() => {
-                    // 더보기는 <a> 태그 (버튼 아님)
-                    const xpath = '//main//a[contains(text(), "더보기")]';
-                    const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                    const link = result.singleNodeValue;
-                    if (link) {
-                        link.click();
-                        return true;
-                    }
-                    return false;
-                });
-
-                if (hasMoreButton) {
-                    console.log('더보기 버튼 클릭 - 무한 스크롤 활성화');
-                    await randomDelay(1000, 2000);
-                } else {
-                    console.log('더보기 버튼 없음');
-                }
-            } catch (e) {
-                console.log('더보기 버튼 처리 중 오류:', e.message);
-            }
-
-            // 스크롤하면서 모든 리스트 로드 (무한 스크롤)
-            console.log('무한 스크롤로 모든 리스트 로딩 중...');
-            let previousHeight = 0;
-            let currentHeight = await page.evaluate(() => document.body.scrollHeight);
-            let scrollAttempts = 0;
-            const maxScrollAttempts = 15; // 최대 15번 스크롤 시도
-
-            while (scrollAttempts < maxScrollAttempts) {
-                // 맨 아래로 스크롤
-                await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-
-                // 로딩 대기 (실제 사용자처럼)
-                await randomDelay(2000, 3000);
-
-                // 높이 변화 확인
-                previousHeight = currentHeight;
-                currentHeight = await page.evaluate(() => document.body.scrollHeight);
-
-                if (currentHeight === previousHeight) {
-                    console.log('더 이상 로드할 리스트 없음 - 완료');
-                    break;
-                }
-
-                scrollAttempts++;
-                console.log(`스크롤 진행 중... (${scrollAttempts}/${maxScrollAttempts}) - 높이: ${currentHeight}px`);
-            }
-
-            // 맨 위로 스크롤백 (결과 파싱 전)
-            await page.evaluate(() => window.scrollTo(0, 0));
-            await randomDelay(1000, 2000);
-
-            const results = await page.evaluate((TARGET_CLINIC_NAME) => {
-                const scrapedData = [];
-                // XPath를 절대 경로에서 상대 경로로 변경하여 구조 변경에 유연하게 대응
-                const eventNodes = document.evaluate('//main//ul/div/a', document, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
-
-                let node;
-                let rank = 1;
-                while ((node = eventNodes.iterateNext())) {
-                    const clinicNameNode = document.evaluate('.//div/div[1]/div[1]/span', node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-
-                    // 병원 이름이 포함되어 있는지 확인 (부분 일치 허용)
-                    if (clinicNameNode && clinicNameNode.textContent.includes(TARGET_CLINIC_NAME)) {
-                        const eventNameNode = document.evaluate('.//div/div[1]/div[1]/h2', node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-                        const starRatingNode = document.evaluate('.//div/div[1]/div[2]/span[1]', node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-                        const reviewCountNode = document.evaluate('.//div/div[1]/div[2]/span[2]/text()[2]', node, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-
-                        scrapedData.push({
-                            rank: rank,
-                            eventName: eventNameNode ? eventNameNode.textContent.trim() : 'N/A',
-                            starRating: starRatingNode ? starRatingNode.textContent.trim() : 'N/A',
-                            reviewCount: reviewCountNode ? reviewCountNode.nodeValue.trim() : 'N/A',
-                        });
-                    }
-                    rank++;
-                }
-                return scrapedData;
-            }, TARGET_CLINIC_NAME);
-
-            resultsByKeyword[keyword] = results;
-            console.log(`'${keyword}' 검색 완료: ${results.length}개 결과 발견`);
+            const url = `https://www.gangnamunni.com/events?q=${encodeURIComponent(keyword)}`;
+            await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+            await page.screenshot({ path: `screenshots/${keyword}.png`, fullPage: true });
+            console.log(`'${keyword}' 스크린샷 저장 완료`);
         } catch (e) {
-            console.error(`'${keyword}' 검색 실패:`, e.message);
-            resultsByKeyword[keyword] = [];
+            console.error(`'${keyword}' 스크린샷 실패:`, e.message);
         }
     }
 
     await browser.close();
-
-    await sendJandiNotification(resultsByKeyword);
-
-    console.log('작업 완료');
 }
 
 async function sendJandiNotification(results) {
@@ -300,10 +117,6 @@ async function sendJandiNotification(results) {
             messageBody += '❌ **리스트에 없음**\n';
         }
         messageBody += `[스크린샷 보기](${screenshotUrl})\n\n`;
-    }
-
-    if (messageBody === '') {
-        messageBody = '금일 강남언니 이벤트 목록에서 해당 병원을 찾지 못했습니다.';
     }
 
     const payload = {
@@ -328,6 +141,36 @@ async function sendJandiNotification(results) {
     } catch (error) {
         console.error('Jandi 알림 전송 실패:', error.message);
     }
+}
+
+async function main() {
+    console.log('강남언니 키워드 순위 확인 시작');
+    const resultsByKeyword = {};
+
+    // 1. API로 데이터 수집
+    for (const keyword of KEYWORDS) {
+        console.log(`'${keyword}' 조회 중...`);
+        try {
+            resultsByKeyword[keyword] = await fetchKeywordResults(keyword);
+            console.log(`'${keyword}' 완료: ${resultsByKeyword[keyword].length}개 결과`);
+        } catch (e) {
+            console.error(`'${keyword}' 조회 실패:`, e.message);
+            resultsByKeyword[keyword] = [];
+        }
+    }
+
+    // 2. 스크린샷 촬영
+    console.log('스크린샷 촬영 시작...');
+    try {
+        await takeScreenshots();
+    } catch (e) {
+        console.error('스크린샷 촬영 실패:', e.message);
+    }
+
+    // 3. Jandi 알림 전송
+    await sendJandiNotification(resultsByKeyword);
+
+    console.log('작업 완료');
 }
 
 main().catch(error => {
