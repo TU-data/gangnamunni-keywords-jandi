@@ -26,44 +26,8 @@ if (!JANDI_WEBHOOK_URL) {
 
 const GITHUB_REPO_URL = `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY}/${process.env.GITHUB_REF_NAME}`;
 
-// __NEXT_DATA__에서 키워드 검색 결과 파싱
-async function fetchKeywordResults(keyword) {
-    const url = `https://www.gangnamunni.com/events?q=${encodeURIComponent(keyword)}`;
-    const res = await axios.get(url, {
-        headers: {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-            'Accept-Language': 'ko-KR,ko;q=0.9',
-        }
-    });
-
-    const match = res.data.match(/<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/s);
-    if (!match) throw new Error('__NEXT_DATA__ 없음');
-
-    const json = JSON.parse(match[1]);
-    const serviceOffers = json.props?.pageProps?.data?.serviceOffers ?? [];
-    const totalCount = json.props?.pageProps?.data?.serviceOfferPagination?.recordsTotal ?? serviceOffers.length;
-
-    console.log(`'${keyword}' 전체 ${totalCount}개 중 상위 ${serviceOffers.length}개 로드`);
-
-    const results = [];
-    serviceOffers.forEach((item, index) => {
-        const offer = item.serviceOffer;
-        const clinicName = offer?.hospital?.name ?? '';
-        if (clinicName.includes(TARGET_CLINIC_NAME)) {
-            results.push({
-                rank: index + 1,
-                eventName: offer?.title ?? 'N/A',
-                starRating: offer?.rating?.amount ?? 'N/A',
-                reviewCount: offer?.rating?.count ?? 'N/A',
-            });
-        }
-    });
-
-    return results;
-}
-
-// Puppeteer는 스크린샷 전용
-async function takeScreenshots() {
+// Puppeteer로 스크린샷 + __NEXT_DATA__ 동시 추출
+async function scrapeAll() {
     if (!fs.existsSync('screenshots')) {
         fs.mkdirSync('screenshots', { recursive: true });
     }
@@ -84,18 +48,58 @@ async function takeScreenshots() {
     await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
     await page.setViewport({ width: 1920, height: 1080 });
 
+    const resultsByKeyword = {};
+
     for (const keyword of KEYWORDS) {
         try {
             const url = `https://www.gangnamunni.com/events?q=${encodeURIComponent(keyword)}`;
             await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+
+            // 스크린샷
             await page.screenshot({ path: `screenshots/${keyword}.png`, fullPage: true });
             console.log(`'${keyword}' 스크린샷 저장 완료`);
+
+            // __NEXT_DATA__ 파싱
+            const serviceOffers = await page.evaluate(() => {
+                const el = document.getElementById('__NEXT_DATA__');
+                if (!el) return [];
+                const json = JSON.parse(el.textContent);
+                return json.props?.pageProps?.data?.serviceOffers ?? [];
+            });
+
+            const totalCount = await page.evaluate(() => {
+                const el = document.getElementById('__NEXT_DATA__');
+                if (!el) return 0;
+                const json = JSON.parse(el.textContent);
+                return json.props?.pageProps?.data?.serviceOfferPagination?.recordsTotal ?? 0;
+            });
+
+            console.log(`'${keyword}' 전체 ${totalCount}개 중 상위 ${serviceOffers.length}개 로드`);
+
+            const results = [];
+            serviceOffers.forEach((item, index) => {
+                const offer = item.serviceOffer;
+                const clinicName = offer?.hospital?.name ?? '';
+                if (clinicName.includes(TARGET_CLINIC_NAME)) {
+                    results.push({
+                        rank: index + 1,
+                        eventName: offer?.title ?? 'N/A',
+                        starRating: offer?.rating?.amount ?? 'N/A',
+                        reviewCount: offer?.rating?.count ?? 'N/A',
+                    });
+                }
+            });
+
+            resultsByKeyword[keyword] = results;
+            console.log(`'${keyword}' 완료: ${results.length}개 결과`);
         } catch (e) {
-            console.error(`'${keyword}' 스크린샷 실패:`, e.message);
+            console.error(`'${keyword}' 실패:`, e.message);
+            resultsByKeyword[keyword] = [];
         }
     }
 
     await browser.close();
+    return resultsByKeyword;
 }
 
 async function sendJandiNotification(results) {
@@ -145,29 +149,9 @@ async function sendJandiNotification(results) {
 
 async function main() {
     console.log('강남언니 키워드 순위 확인 시작');
-    const resultsByKeyword = {};
 
-    // 1. API로 데이터 수집
-    for (const keyword of KEYWORDS) {
-        console.log(`'${keyword}' 조회 중...`);
-        try {
-            resultsByKeyword[keyword] = await fetchKeywordResults(keyword);
-            console.log(`'${keyword}' 완료: ${resultsByKeyword[keyword].length}개 결과`);
-        } catch (e) {
-            console.error(`'${keyword}' 조회 실패:`, e.message);
-            resultsByKeyword[keyword] = [];
-        }
-    }
+    const resultsByKeyword = await scrapeAll();
 
-    // 2. 스크린샷 촬영
-    console.log('스크린샷 촬영 시작...');
-    try {
-        await takeScreenshots();
-    } catch (e) {
-        console.error('스크린샷 촬영 실패:', e.message);
-    }
-
-    // 3. Jandi 알림 전송
     await sendJandiNotification(resultsByKeyword);
 
     console.log('작업 완료');
